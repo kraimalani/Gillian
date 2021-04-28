@@ -16,15 +16,11 @@ To make the task simple, we created a `Makefile` that lets you run everything. I
 - `$ make c-lemma LEMMA=lemma_name` will run the proof of the C lemma whose identifier is `lemma_name`, if such a lemma exists.
 
 
-In addition to this, there exists another `Makefile` that allows you to reproduce the three bugs that we found in the C code. First go into the following directory:
+In addition to this, there are three rules that allow you to reproduce the  bugs that we found in the C code:
 ```bash
-$ cd Gillian-C/examples/amazon/bug
-```
-where you have three rules at your disposal:
-```bash
-$ make byte-cursor-ub
-$ make string-bug
-$ make header-bug
+$ make c-byte-cursor-ub
+$ make c-string-bug
+$ make c-header-bug
 ```
 
 The first rule will trigger an undefined behaviour (details [here](#c-bug-ub)); the second an over-allocation (details [here](#c-bug-oa)); and the third a logical error in the parsing of the header (details [here](#c-bug-logic)).
