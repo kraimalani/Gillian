@@ -345,7 +345,7 @@ MEM_ERR:
                       #headerIv, #headerAuthTag, #errorMessage) *
               (#definition == `Incomplete`) *
               (#length == len #data) *
-              (#length <# 2147483647) *
+              (#length <# MAX_IDX_SIZE) *
               any_valid_aws_cryptosdk_hdr(#hdr, #alloc) *
               default_allocator(#alloc) *
               any_aws_last_error()
