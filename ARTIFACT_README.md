@@ -112,6 +112,26 @@ to obtain the list of possible arguments. We discuss the arguments that are used
 
 ## C: Structure, annotations, bugs
 
+### Relevant folder structure
+
+The instantiation of Gillian to C (Gillian-C) can be found in the `Gillian-C` folder. The folders and files related to the verification of the deserialisation module of the C implementation of the AWS Encryption SDK can be found in the `examples/amazon` folder inside `Gillian-C`, and they are:
+
+- the main files:
+  - `header.c` & `header.h`: the **main** files, containing the type definition for the `aws_cryptosdk_hdr` structure as well as the main function to verify, `aws_cryptosdk_hdr_parse`, as well as some auxiliary functions, including `parse_edk`.
+  - `ec.c` & `ec.h`: containing `aws_cryptosdk_enc_ctx_deserialize` and its specification.
+  - `edk.c` & `edk.h`: containing the type defition for the structure `aws_cryptosdk_edk`, as well as the predicates used to describe it and auxiliary function for the manipulation of the structure.
+  - `hash_table.c` & `hash_table.h`: containing the type definition and axiomatisation for `struct aws_hash_table`.
+  - `array_list.c` & `array_list.h`: containing the type definition for `struct aws_array_list` as well as predicates specifying *specialised* array lists that contain elements of type edk.
+  - `byte_buf.c` & `byte_buf.h`: containing the type definition for `aws_byte_cursor` and `aws_byte_buf` as well as the functions, predicates and specifications necessary for their manipulation. As we were verifying an algorithm whose main objective is reading a buffer, a substantial part of the effort was done in this file.
+  - `error.c` & `error.h`: containing the functions and predicate that a allow for the usage of the custom error-manipulation mechanism in AWS code.
+  - `allocator.c` & `allocator.h`: containing the type definition for `aws_allocator`. Note that we always a specific instance of this allocator, which can only have the default behaviour, as we do not support higher-order reasoning.
+  - `base.c` & `base.h`: containing various macros, predicates and functions used in many other places but did not deserve their own file. 
+  - `logic/ByteLogic.gil`: basic conversion from lists of bytes to various numerics
+  - `logic/EncryptionHeaderLogic.gil`: language-independent predicates and lemmas describing the serialised AWS Message Header
+  - `logic/ListLogic.gil`: predicates and lemmas for advanced list management.
+  - `logic/Utf8Logic.gil`: axiomatisation of conversion from bytes to UTF-8 strings
+- files inside the `bugs` folder: the files adapted to reproduce the different bugs we found.
+
 ### Reading Gillian-C annotations: Predicates
 
 Let us dive into how to read the annotations in C. We recommend that you open the code in VSCode, for which we have developed a syntax highlighting extension that makes annotations more readable.
@@ -333,10 +353,10 @@ Link: https://github.com/aws/aws-encryption-sdk-c/issues/695
 
 ### Relevant folder structure
 
-The instantiation of Gillian to JavaScript (Gillian-JS) can be found in the `Gillian-JS` folder. The folders and files related to the verification of the deserialisation module of the JS implementation of the AWS SDK can be found in the `Examples\Amazon` folder inside `Gillian-JS`, and they are:
+The instantiation of Gillian to JavaScript (Gillian-JS) can be found in the `Gillian-JS` folder. The folders and files related to the verification of the deserialisation module of the JS implementation of the AWS SDK can be found in the `Examples/Amazon` folder inside `Gillian-JS`, and they are:
 
 - the main files:
-  - `deserialize_factory.js`: the **main** main file, containing all of the functions of the deserialisation module and their specifications
+  - `deserialize_factory.js`: the **main** file, containing all of the functions of the deserialisation module and their specifications
   - `AmazonLogic.jsil`: language-dependent predicates and lemmas describing the deserialised AWS header
   - `ByteLogic.jsil`: basic conversion from lists of bytes to various numerics
   - `EncryptionHeaderLogic.jsil`: language-independent predicates and lemmas describing the serialised AWS Message Header
