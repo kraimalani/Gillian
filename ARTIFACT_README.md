@@ -10,8 +10,8 @@ Welcome to the artifact README for the CAV 2021 paper: "Gillian, Part II: Real-W
 
 To make the task simple, we created a `Makefile` that lets you run everything. In particular, in the root of the `Gillian` folder, running:
 
-- `$ make c` will verify the correctness of all of the functions that were specified in the C aws-encryption-sdk. The three most important ones are: `aws_cryptosdk_enc_ctx_deserialize`, `parse_edk`, and the main deserialisation function, `aws_cryptosdk_hdr_parse`. This verification takes approximately 14 minutes on .
-- `$ make js` will verify the correctness of all of the functions that were specified in the JS aws-encryption-sdk. The three most important ones are: `decodeEncryptionContext`, `deserializeEncryptedDataKeys`, and the main deserialisation function, `deserializeMessageHeader`. This verification takes approximately 45 seconds.
+- `$ make c` will verify the correctness of all of the functions that were specified in the C aws-encryption-sdk. The three most important ones are: `aws_cryptosdk_enc_ctx_deserialize`, `parse_edk`, and the main deserialisation function, `aws_cryptosdk_hdr_parse`. This verification takes approximately 14 minutes on a machine with an Intel Core i7-4980HQ CPU 2.80 GHz, DDR3 RAM 16GB, and a 256GB solid-state hard-drive, running macOS.
+- `$ make js` will verify the correctness of all of the functions that were specified in the JS aws-encryption-sdk. The three most important ones are: `decodeEncryptionContext`, `deserializeEncryptedDataKeys`, and the main deserialisation function, `deserializeMessageHeader`. This verification takes approximately 45 seconds on the same machine as above.
 - `$ make c-proc PROC=function_name` will run the verification of only the C function whose identifier is `function_name`, if it has a specification. For example, `$ make c-proc PROC=parse_edk` verifies the `parse_edk` function.
 - `$ make c-lemma LEMMA=lemma_name` will run the proof of the C lemma whose identifier is `lemma_name`, if such a lemma exists.
 
@@ -333,7 +333,17 @@ Link: https://github.com/aws/aws-encryption-sdk-c/issues/695
 
 ### Relevant folder structure
 
-[TODO]
+The instantiation of Gillian to JavaScript (Gillian-JS) can be found in the `Gillian-JS` folder. The folders and files related to the verification of the deserialisation module of the JS implementation of the AWS SDK can be found in the `Examples\Amazon` folder inside `Gillian-JS`, and they are:
+
+- the main files:
+  - `deserialize_factory.js`: the **main** main file, containing all of the functions of the deserialisation module and their specifications
+  - `AmazonLogic.jsil`: language-dependent predicates and lemmas describing the deserialised AWS header
+  - `ByteLogic.jsil`: basic conversion from lists of bytes to various numerics
+  - `EncryptionHeaderLogic.jsil`: language-independent predicates and lemmas describing the serialised AWS Message Header
+  - `ListLogic.jsil`: predicates and lemmas for advanced list management
+  - `Utf8Logic.jsil`: axiomatisation of conversion from bytes to UTF-8 strings
+- files inside `bugs\pp`: the main files adapted to reproduce the prototype poisoning bug
+- files inside `bugs\frozen`: the main files adapted to reproduce the non-frozen encryption context bug
 
 ### Understanding the discovered bugs
 
