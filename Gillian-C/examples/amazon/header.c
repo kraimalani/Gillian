@@ -136,6 +136,7 @@ int is_known_type(uint8_t content_type) {
             (ret == TRUE)
 
     OR
+
         requires:
             (alg_id == int(#alg_id)) *
             BAlgorithmSuite(#alg_id, #errorMessage)
@@ -402,7 +403,7 @@ MEM_ERR:
                    #ECLength, #part_two, #ECKs, #part_three, #EDKs, #contentType, #headerIvLength,
                    #frameLength, #headerLength, #headerIv, #headerAuthTag, #edkDef, #errorMessage) *
             (#length == len #data) *
-            (#length <# MAX_IDX_SIZE) *
+            (#length <# 2147483647) *
             any_valid_aws_cryptosdk_hdr(#hdr, #alloc) *
             default_allocator(#alloc) *
             any_aws_last_error()
