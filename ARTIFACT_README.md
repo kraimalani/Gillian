@@ -1,57 +1,53 @@
-# Artifact: Gillian, Part II - Real World Verification for Javascript and C
+# Artifact: Gillian, Part II - Real World Verification for JavaScript and C
 
-Welcome to the Gillian Part II artifact for CAV2021. In this document, we present how to use this artifact to reproduce the results obtained in the paper.
+Welcome to the artifact README for the CAV 2021 paper: "Gillian, Part II: Real-World Verification for JavaScript and C". In this document, we describe how to use this artifact to reproduce the results presented in the paper.
 
 ## Table of contents
 
 [TOC]
 
-## Reproducing the paper's results
+## Reproducing the results
 
-Let us explain how to quickly reproduce the results. To simplify the task for you, we wrote some `Makefile` that let you run everything.
+To make the task simple, we created a `Makefile` that lets you run everything. In particular, in the root of the `Gillian` folder, running:
 
-
-First of all, in the root of the `Gillian` folder, running:
-
-- `$ make c` will start the verification of every functions we specified in the C aws-encryption-sdk.
-- `$ make js` will start the verification of every functions we specified in the JS aws-encryption-sdk.
-- `$ make c-proc PROC=function_name` will start the verification of the function that has name `function_name` (if it has a specification).
-- `$ make c-lemma LEMMA=lemma_name` will start running the proof of the specificed lemma.
+- `$ make c` will verify the correctness of all of the functions that were specified in the C aws-encryption-sdk. The three most important ones are: `aws_cryptosdk_enc_ctx_deserialize`, `parse_edk`, and the main deserialisation function, `aws_cryptosdk_hdr_parse`. This verification takes approximately 14 minutes on .
+- `$ make js` will verify the correctness of all of the functions that were specified in the JS aws-encryption-sdk. The three most important ones are: `decodeEncryptionContext`, `deserializeEncryptedDataKeys`, and the main deserialisation function, `deserializeMessageHeader`. This verification takes approximately 45 seconds.
+- `$ make c-proc PROC=function_name` will run the verification of only the C function whose identifier is `function_name`, if it has a specification. For example, `$ make c-proc PROC=parse_edk` verifies the `parse_edk` function.
+- `$ make c-lemma LEMMA=lemma_name` will run the proof of the C lemma whose identifier is `lemma_name`, if such a lemma exists.
 
 
-In addition to this Makefile, we wrote another `Makefile` that lets your reproduce the bugs we found in the C code.
-
-Start by going inside the right directory:
+In addition to this, there exists another `Makefile` that allows you to reproduce the three bugs that we found in the C code. First go into the following directory:
 ```bash
 $ cd Gillian-C/examples/amazon/bug
 ```
-
-You now have several rules at your disposal:
+where you have three rules at your disposal:
 ```bash
-$ make string-bug
 $ make header-bug
+$ make string-bug
 $ make byte-cursor-ub
 ```
 
-Each rule will run the execution for a different bug.
+The first rule demonstrates the found logical error in the parsing of the header; the second demonstrates the found over-allocation; and the third demonstrates the found undefined behaviour.
 
-Finally, there is another Makefile that lets you reproduce the failed verification for the buggy function in JavaScript:
+Finally, there exists another `Makefile` that lets you reproduce the failed verification for the two bugs discovered in JavaScript:
 
 ```shell
 $ cd ../../../.. # Go back to the Gillian root
-$ cd Gillian-JS/Examples/amazon/bug+
-$ !!!!!!! PETARRRRRRR !!!!!!!!!
+$ cd Gillian-JS/Examples/amazon/bug
+```
+where you have two rules at your disposal:
+
+```bash
+$ make proto-bug
+$ make frozen-bug
 ```
 
-!!!!!! PETARRRRRRR !!!!!!!!!!
+The first rule demonstrates the found prototype poisoning bug; and the second demonstrates the bug in which the encryption context is returned non-frozen.
 
 
 
 
-
-
-
-## Gillian : some general tips
+## Gillian in more detail
 
 ### What does Gillian say ?
 
@@ -72,13 +68,13 @@ When running Gillian, several steps occur :
 - Finally, Gillian prints the time spent in the three first phases, and starts running the tests one by one. Each test corresponds either to a lemma or a function specification. Gillian will indicate which one it is currently proving. Moreover, when verifying function specifications. Gillian will print a bit more information.
   During symbolic execution, it will print for each branch it has taken
   - `n` when the function's end has been reached in "normal mode".
-  
+
   - `e` when the function's end has a been reached in "error mode". Error mode does not exist in C and is used to model the way functions end when using `throw` in JavaScript.
-  
+
     While analysing the different results obtained for that branch, it will print
-  
+
   - `s` when one of the test ended on a return and unified successfully against the specified post-condition.
-  
+
   - `f` if the symbolic execution has failed early or has ended but did not unify successfully against the post condition
   Finally, after all of that has been done Gillian prints `Failure` or `Success`, the latter corresponding to every branch finishing as expected and unifying against the desired post-condition.
 
@@ -101,7 +97,7 @@ The reader will find that both executable exposes at least four sub-commands  : 
 
 - `compile` allows one to generate the GIL files from a target-language program, second corresponds to whole program.
 - `wpst` corresponds to whole-program symbolic testing, presented in our previous paper entitled Gillian Part I, published at PLDI2020. It is out of the scope of this paper.
-- `verify` corresponds to full verification (including specifications and abstractions). *It is the only command that is in the scope of the current paper*. 
+- `verify` corresponds to full verification (including specifications and abstractions). *It is the only command that is in the scope of the current paper*.
 -  `act` corresponds to automatic compositionnal testing, which uses bi-abduction in the style of Infer. It is out of the scope of this paper.
 
 Because `verify` is the command that we're interested in for this artifact, we'll give a bit more details about it.
@@ -138,7 +134,7 @@ We will now walk the reader through a few elements written in `Gillian-C/example
 
 First of all, comments starting with `/*@` are parsed by the Gillian-C parser as logic annotations. Such comments are used to define predicates, lemmas and specifications.
 
-In particular, let us give details about the first predicate that is defined called `valid_aws_byte_cursor_ptr`. It describes an element of type `struct aws_byte_cursor` on which some constraints have been applied. It can be seen as a form of invariant that should be preserved whenever an element of that type is constructed or modified. 
+In particular, let us give details about the first predicate that is defined called `valid_aws_byte_cursor_ptr`. It describes an element of type `struct aws_byte_cursor` on which some constraints have been applied. It can be seen as a form of invariant that should be preserved whenever an element of that type is constructed or modified.
 
 The `struct aws_byte_cursor` type is defined in `Gillian-C/examples/amazon/byte_buf.h` as follows:
 
@@ -150,7 +146,7 @@ struct aws_byte_cursor {
 ```
 
 The reader may recognise that such a cursor is an implementation of an array slice : the cursor contains a pointer `ptr` that can be anywhere inside an array, and a length `len`. It should always be possible to read `len` bytes at address `ptr`.
-The original AWS code for this structure does contain annotations for concrete tests that try to enforce such a behaviour. Every function that uses an aws_byte_cursor ends with a post-condition check of the form 
+The original AWS code for this structure does contain annotations for concrete tests that try to enforce such a behaviour. Every function that uses an aws_byte_cursor ends with a post-condition check of the form
 
 ```c
 AWS_POSTCONDITION(aws_byte_buf_is_valid(cursor))
@@ -191,7 +187,7 @@ It contains two definitions, separated by a semi-colon.
 The first definition contains three bits of information, joined by the [`separating conjunction`](https://en.wikipedia.org/wiki/Separation_logic)
 
 - `cur -> struct aws_byte_cursor { long(0); buffer })`, which says that `cur` is a valid pointer to a structure of type `struct aws_byte_cursor`, of which the `len` field has value `long(0)` (the type corresponds to the internal type [used by CompCert](https://compcert.org/doc/html/compcert.common.AST.html#Tlong) in x64 mode to interpret `size_t`).
-- It says that, in this case of the predicate the length is 0 and the represented list of bytes is `nil`, which is an alias for the empty list. Note that `length` corresponds to the mathematical value representing the length. 
+- It says that, in this case of the predicate the length is 0 and the represented list of bytes is `nil`, which is an alias for the empty list. Note that `length` corresponds to the mathematical value representing the length.
 - It says nothing about `buffer`, but the `-> struct xxx` annotation is compiled to a predicate in GIL that indicates the layout of the structure in memory, and this predicates does contain the information that buffer is either a pointer or `NULL`.
 
 The second definition is similar to the first one, but specifies the non-empty case:
@@ -239,7 +235,7 @@ The proof is optional, since we may not be able to write proofs when lemmas are 
 
 ### Reading Gillian-C annotations: Tactics
 
-Most verification proofs require human help. For example, it is necessary to write loop invariants or to ask Gillian to unfold a specific predicate. These tactics are just logic commands that will be called in the middle of execution. If the reader is interested, the type definition corresponding to the logic commands in C (later compiled to logic commands in GIL) is in `Gillian-C/lib/cLogic.ml`: 
+Most verification proofs require human help. For example, it is necessary to write loop invariants or to ask Gillian to unfold a specific predicate. These tactics are just logic commands that will be called in the middle of execution. If the reader is interested, the type definition corresponding to the logic commands in C (later compiled to logic commands in GIL) is in `Gillian-C/lib/cLogic.ml`:
 
 ```ocaml
 type t =
@@ -330,7 +326,7 @@ struct aws_string *str = malloc(sizeof(struct aws_string) + 1 + length);
 
 This is indeed what one would expect : size of the structure + length of the string + 1 byte for the null character `\0` terminating the string. However, because the flexible array member is specified using `bytes[1]`, `sizeof` gives it a size of `1 byte`. Because of alignment constraints in C, the size of the structure is given as `24` instead of `16`. Therefore, every allocated aws_string has 8 too many bytes.
 
-It is quite a complex bug to fix because of the inconsistent behaviour of flexible array members between C and C++, as well as between different versions of C. For verification to pass, we decided on a fix that is correct in most C versions (including CompCert C) but is still ambiguous in C++, and removed the size specifier. 
+It is quite a complex bug to fix because of the inconsistent behaviour of flexible array members between C and C++, as well as between different versions of C. For verification to pass, we decided on a fix that is correct in most C versions (including CompCert C) but is still ambiguous in C++, and removed the size specifier.
 
 We detected that bug because thes structure created by the constructore could not unify against the the predicate we manually wrote to describe the expected layout in memory.
 
