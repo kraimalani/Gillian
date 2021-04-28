@@ -29,22 +29,14 @@ $ make header-bug
 
 The first rule will trigger an undefined behaviour (details [here](#c-bug-ub)); the second an over-allocation (details [here](#c-bug-oa)); and the third a logical error in the parsing of the header (details [here](#c-bug-logic)).
 
-Finally, there exists another `Makefile` that lets you reproduce the failed verification for the two bugs discovered in JavaScript:
-
-```shell
-$ cd ../../../.. # Go back to the Gillian root
-$ cd Gillian-JS/Examples/amazon/bug
-```
-where you have two rules at your disposal:
+Finally, there are two rules for reproducing the bugs found in the JavaScript code:
 
 ```bash
-$ make proto-bug
-$ make frozen-bug
+$ make js-proto-bug
+$ make js-frozen-bug
 ```
 
-The first rule will trigger the prototype poisoning bug (details [here](#c-bug-pp)); and the second the bug in which the encryption context is returned non-frozen (details [here](#js-bug-nf)).
-
-
+The first rule will trigger the prototype poisoning bug (details [here](#js-bug-pp)); and the second the bug in which the encryption context is returned non-frozen (details [here](#js-bug-nf)). These will be a bit slower to execute as they will be  producing the appropriate logs.
 
 
 ## Gillian in more detail
@@ -122,7 +114,7 @@ to obtain the list of possible arguments. We discuss the arguments that are used
 - `--no-lemma-proof` allows for admittance of lemmas without proofs, while still proving lemmas that have proofs. In the case of this artifact, we need to apply lemmas that correspond to parts of the code that have been axiomatised (as explained in the caveats section in the paper).
 - (For C only) `--fstruct-passing` is a flag that is passed directly to `CompCert` and is detailed in [its manual](https://compcert.org/man/manual003.html#sec41). It enables the following feature: "Support functions that take parameters and return results of composite types (struct or union types) by value".
 
-## C: reading annotations and understanding the bugs
+## C: Structure, annotations, bugs
 
 ### Reading Gillian-C annotations: Predicates
 
@@ -262,7 +254,7 @@ type t =
 
 ### Understanding the discovered bugs
 
-We found three bugs in the AWS implementation, and we have already explained earlier how to reproduce those bugs. In this section, for each bug, we explain how it can happen, suggest a fix, and give the link to the Github issue that was filed.
+We found three bugs in the AWS implementation, and we have already explained earlier how to reproduce those bugs. In this section, for each bug, we explain how it can happen and suggest a fix.
 
 #### A potential undefined behaviour in aws_byte_cursor_advance <a name="c-bug-ub"></a>
 
@@ -341,6 +333,96 @@ This allows one to create headers that are not well-formed, but could still be p
 
 Link: https://github.com/aws/aws-encryption-sdk-c/issues/695
 
-## JS: reading annotations and understanding the bugs
+## JS: structure, annotations, bugs
 
-!!!! PETARARRRRRRR !!!!!
+### Relevant folder structure
+
+[TODO]
+
+### Understanding the discovered bugs
+
+We found two bugs in the AWS implementation, and we have already explained earlier how to reproduce those bugs. In this section, for each bug, we explain how it can happen and provide a fix. 
+
+#### Prototype poisoning in decodeEncryptionContext <a name="js-bug-pp"></a>
+
+The `decodeEncryptionContext` deserialises the encryption context into a key-value map, initially implemented as a standard JavaScript object, encoding keys as property names and values as property values:
+
+```c
+var encryptionContext = {};
+```
+
+However, given the prototype inheritance mechanism of JavaScript, object property lookup may succeed if the property in question exists further along the prototype chain (say, `"hasOwnProperty"`in `Object.prototype`). This, combined with the runtime correctness check:
+
+```javascript
+needs(
+	encryptionContext[key] === undefined,
+	'decodeEncryptionContext: Duplicate encryption context key value.'
+)
+```
+
+where the `needs` function is defined as follows
+
+```javascript
+function needs(condition, errorMessage) {
+  if (!condition) {
+    throw new Error(errorMessage)
+  }
+}
+```
+
+results in the function throwing an error if the key coincides with a property of `Object.prototype`. 
+
+In the created log file, reachable by typing `open file.log`, line 2781259 says:
+
+```
+VERIFICATION FAILURE: Spec decodeEncryptionContext 0 terminated with flag error instead of normal
+```
+
+which can be traced back to the above correctness check using the`needs` function throwing an error. The simplest way to fix this is to create the encryption context object with the prototype `null`:
+
+```javascript
+var encryptionContext = Object.create(null)
+```
+
+Pull request: https://github.com/aws/aws-encryption-sdk-javascript/pull/216
+
+#### Authenticated encryption context can be edited by third parties  <a name="js-bug-nf"></a>
+
+Again in the `decodeEncryptionContext` function, in the case when the encryption context is empty, the returned object is returned non-frozen:
+
+```javascript
+var encryptionContext = Object.create(null)
+
+if (!encodedEncryptionContext.byteLength) {
+  /* ERROR: OBJECT NOT FROZEN */
+  return encryptionContext
+}
+```
+
+In the created log file, which is this time at the `verbose` level and is reachable by typing `open file.log`, line 6757449 says:
+
+```
+VERIFICATION FAILURE: Spec decodeEncryptionContext 0 - post condition not unifiable
+```
+
+which can then be traced back to line 6736798, which says:
+
+```
+WARNING: Unify Assertion Failed: (<Cell>(_lvar_3039, "@extensible"; false), ) with subst 
+```
+
+revealing that the object is not non-extensible as intended, which is then understood to come from the object not being frozen.
+
+This allows third parties to edit the deserialised encryption context, which constitutes a security breach. As we are not security experts, we cannot estimate the severity of this breach. The fix is to freeze the object before the return statement using
+
+```javascript
+Object.freeze(encryptionContext);
+```
+
+This bug was communicated to the developers personally and we are expecting it to be fixed soon.
+
+#### BONUS: Improved implementation of the readElements function
+
+In a nutshell, the implementation of the readElements function was not aligned with the underlying data structure, making its specification and verification very difficult. We suggested an appropriate change; more details are available in the pull request below.
+
+Pull request: https://github.com/aws/aws-encryption-sdk-javascript/pull/215
