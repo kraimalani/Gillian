@@ -11,7 +11,6 @@
 #define false 0
 
 #define GILLIAN(X) __builtin_annot(X)
-#define MAX_IDX_SIZE 2147483647
 
 typedef int bool;
 typedef unsigned long size_t;

@@ -4,14 +4,14 @@
 
 pure pred invalid_read(read_len, cursor_len) {
   cursor_len <# read_len;
-  MAX_IDX_SIZE <# read_len;
-  MAX_IDX_SIZE <# cursor_len
+  2147483647 <# read_len;
+  2147483647 <# cursor_len
 }
 
 pure pred valid_read(read_len, cursor_len) {
   (read_len <=# cursor_len) *
-  (read_len <=# MAX_IDX_SIZE) *
-  (cursor_len <=# MAX_IDX_SIZE)
+  (read_len <=# 2147483647) *
+  (cursor_len <=# 2147483647)
 }
 
 pred nounfold valid_aws_byte_cursor_ptr(+cur, length, buffer: List, alpha) {
@@ -20,7 +20,7 @@ pred nounfold valid_aws_byte_cursor_ptr(+cur, length, buffer: List, alpha) {
 
   (cur -> struct aws_byte_cursor { long(length); buffer }) * (0 <# length) *
   ARRAY(buffer, char, length, alpha) * (length == len alpha) *
-  (length <=# MAX_IDX_SIZE)
+  (length <=# 2147483647)
 }
 
 spec aws_byte_cursor_advance(_res, cursor, length) {
