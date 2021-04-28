@@ -255,8 +255,8 @@ module CLCmd = struct
     | Invariant  of {
         assertion : CAssert.t;
         bindings : string list;
-      } (** Invaria*)
-    | SymbExec
+      } (** Loop invariant *)
+    | SymbExec (** Ignore the next function specification and symbolically execute instead *)
 
   let rec pp fmt lcmd =
     let pp_unfold_bindings ft b =
