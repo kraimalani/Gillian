@@ -19,7 +19,7 @@
 
         (cur -> struct aws_byte_cursor { long(length); buffer }) * (0 <# length) *
         ARRAY(buffer, char, length, alpha) * (length == len alpha) *
-        (length <=# 2147483647)
+        (length <=# MAX_IDX_SIZE)
     }
 
     lemma valid_aws_byte_cursor_ptr_facts(cur, length, buffer, alpha) {
@@ -28,7 +28,7 @@
 
         conclusions:
             valid_aws_byte_cursor_ptr(#cur, #length, #buffer, #alpha) *
-            (#length == len #alpha) * (#length <=# 2147483647)
+            (#length == len #alpha) * (#length <=# MAX_IDX_SIZE)
 
         proof:
             unfold valid_aws_byte_cursor_ptr(#cur, #length, #buffer, #alpha)
@@ -158,14 +158,14 @@ void aws_byte_buf_clean_up(struct aws_byte_buf *buf) {
 /*@
     pure pred valid_read(read_len, cursor_len) {
         (read_len <=# cursor_len) *
-        (read_len <=# 2147483647) *
-        (cursor_len <=# 2147483647)
+        (read_len <=# MAX_IDX_SIZE) *
+        (cursor_len <=# MAX_IDX_SIZE)
     }
 
     pure pred invalid_read(read_len, cursor_len) {
         cursor_len <# read_len;
-        2147483647 <# read_len;
-        2147483647 <# cursor_len
+        MAX_IDX_SIZE <# read_len;
+        MAX_IDX_SIZE <# cursor_len
     }
 */
 
