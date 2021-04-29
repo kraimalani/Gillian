@@ -349,7 +349,7 @@ This allows one to create headers that are not well-formed, but could still be p
 
 Link: https://github.com/aws/aws-encryption-sdk-c/issues/695
 
-## JS: structure, annotations, bugs
+## JS: Structure, annotations, bugs
 
 ### Relevant folder structure
 
