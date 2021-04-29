@@ -28,7 +28,7 @@ The first rule will trigger an undefined behaviour (details [here](#c-bug-ub)); 
 Finally, there are two rules for reproducing the bugs found in the JavaScript code:
 
 ```bash
-$ make js-proto-bug
+$ make js-pp-bug
 $ make js-frozen-bug
 ```
 
@@ -117,20 +117,20 @@ to obtain the list of possible arguments. We discuss the arguments that are used
 The instantiation of Gillian to C (Gillian-C) can be found in the `Gillian-C` folder. The folders and files related to the verification of the deserialisation module of the C implementation of the AWS Encryption SDK can be found in the `examples/amazon` folder inside `Gillian-C`, and they are:
 
 - the main files:
-  - `header.c` & `header.h`: the **main** files, containing the type definition for the `aws_cryptosdk_hdr` structure as well as the main function to verify, `aws_cryptosdk_hdr_parse`, as well as some auxiliary functions, including `parse_edk`.
+  - `header.c` & `header.h`: the **main** main files, containing the type definition for the `aws_cryptosdk_hdr` structure as well as the main function to verify, `aws_cryptosdk_hdr_parse`, as well as some auxiliary functions, including `parse_edk`.
   - `ec.c` & `ec.h`: containing `aws_cryptosdk_enc_ctx_deserialize` and its specification.
-  - `edk.c` & `edk.h`: containing the type defition for the structure `aws_cryptosdk_edk`, as well as the predicates used to describe it and auxiliary function for the manipulation of the structure.
+  - `edk.c` & `edk.h`: containing the type defition for the structure `aws_cryptosdk_edk`, as well as the predicates used to describe it, and auxiliary functions for the manipulation of the structure.
   - `hash_table.c` & `hash_table.h`: containing the type definition and axiomatisation for `struct aws_hash_table`.
   - `array_list.c` & `array_list.h`: containing the type definition for `struct aws_array_list` as well as predicates specifying *specialised* array lists that contain elements of type edk.
-  - `byte_buf.c` & `byte_buf.h`: containing the type definition for `aws_byte_cursor` and `aws_byte_buf` as well as the functions, predicates and specifications necessary for their manipulation. As we were verifying an algorithm whose main objective is reading a buffer, a substantial part of the effort was done in this file.
-  - `error.c` & `error.h`: containing the functions and predicate that a allow for the usage of the custom error-manipulation mechanism in AWS code.
-  - `allocator.c` & `allocator.h`: containing the type definition for `aws_allocator`. Note that we always a specific instance of this allocator, which can only have the default behaviour, as we do not support higher-order reasoning.
+  - `byte_buf.c` & `byte_buf.h`: containing the type definition for `aws_byte_cursor` and `aws_byte_buf` as well as the functions, predicates and specifications necessary for their manipulation. As we were verifying an algorithm whose main objective is reading a buffer, a substantial part of the effort was directed towards this file.
+  - `error.c` & `error.h`: containing the functions and predicates that allow for the usage of the custom error-manipulation mechanism in AWS code.
+  - `allocator.c` & `allocator.h`: containing the type definition for `aws_allocator`. Note that we always use a specific instance of this allocator, which can only have the default behaviour, as we do not support higher-order reasoning.
   - `base.c` & `base.h`: containing various macros, predicates and functions used in many other places but did not deserve their own file. 
   - `logic/ByteLogic.gil`: basic conversion from lists of bytes to various numerics
   - `logic/EncryptionHeaderLogic.gil`: language-independent predicates and lemmas describing the serialised AWS Message Header
   - `logic/ListLogic.gil`: predicates and lemmas for advanced list management.
   - `logic/Utf8Logic.gil`: axiomatisation of conversion from bytes to UTF-8 strings
-- files inside the `bugs` folder: the files adapted to reproduce the different bugs we found.
+- files inside the `bugs` folder: the main files adapted to reproduce the different bugs we found.
 
 ### Reading Gillian-C annotations: Predicates
 
@@ -356,14 +356,125 @@ Link: https://github.com/aws/aws-encryption-sdk-c/issues/695
 The instantiation of Gillian to JavaScript (Gillian-JS) can be found in the `Gillian-JS` folder. The folders and files related to the verification of the deserialisation module of the JS implementation of the AWS SDK can be found in the `Examples/Amazon` folder inside `Gillian-JS`, and they are:
 
 - the main files:
-  - `deserialize_factory.js`: the **main** file, containing all of the functions of the deserialisation module and their specifications
+  - `deserialize_factory.js`: the **main** main file, containing all of the functions of the deserialisation module and their specifications
   - `AmazonLogic.jsil`: language-dependent predicates and lemmas describing the deserialised AWS header
   - `ByteLogic.jsil`: basic conversion from lists of bytes to various numerics
   - `EncryptionHeaderLogic.jsil`: language-independent predicates and lemmas describing the serialised AWS Message Header
   - `ListLogic.jsil`: predicates and lemmas for advanced list management
   - `Utf8Logic.jsil`: axiomatisation of conversion from bytes to UTF-8 strings
-- files inside `bugs\pp`: the main files adapted to reproduce the prototype poisoning bug
-- files inside `bugs\frozen`: the main files adapted to reproduce the non-frozen encryption context bug
+- files inside `bugs/pp`: the main files adapted to reproduce the prototype poisoning bug
+- files inside `bugs/frozen`: the main files adapted to reproduce the non-frozen encryption context bug
+
+### Reading Gillian-JS annotations: Predicates
+
+Gillian-JS also comes with many built-in predicates for describing standard JavaScript objects and their properties (e.g, `JSObject`, `DataProp`), as well as other built-in objects (e.g., `JSFunctionObject`, `ArrayBuffer`, `Uint8Array`, etc.), scoping (`scope`), and many more. The user-defined predicates are declared as in C; for example, the following predicate describes what it means for an object at location `l`to contain a list of property-value pairs described by the list `PVPairs`: 
+
+```c
+pred ObjectTableStructure(+l:Obj, +PVPairs:List) :
+    (* Base case - no properties left *)
+    (PVPairs == {{ }}),
+
+    (* Recursive case - one property and the rest *)
+    (PVPairs == {{ #prop, #value }} :: #restPVPairs) *
+    DataProp(l, #prop, #value) * types(#value : Str) *
+    ObjectTableStructure(l, #restPVPairs);
+```
+
+### Reading Gillian-JS annotations: Specifications
+
+Specifications and lemmas are written slightly differently in JavaScript than in C, as illustrated by the following example of the specification of the `decodeEncryptionContext` function:
+
+```javascript
+/**
+    @pre (this == undefined) * (encodedEncryptionContext == #eEC) *
+         Uint8Array(#eEC, #aBuffer, #byteOffset, #byteLength) * 
+         ArrayBuffer(#aBuffer, #data) *
+         (#EC == l-sub(#data, #byteOffset, #byteLength)) *
+         (#definition == "Complete") *
+         RawEncryptionContext(#definition, #EC, #ECKs, #errorMessage) *
+
+         scope(needs : #needs) * 
+         JSFunctionObject(#needs, "needs", #n_sc, #n_len, #n_proto) *
+         scope(readElements : #readElements) * 
+         JSFunctionObject(#readElements, "readElements", #rE_sc, #rE_len, #rE_proto) *
+         scope(toUtf8: #toUtf8) * 
+         JSFunctionObject(#toUtf8, "toUtf8", #t_sc, #t_len, #t_proto) *
+         JSInternals()
+
+    @post Uint8Array(#eEC, #aBuffer, #byteOffset, #byteLength) * 
+    			ArrayBuffer(#aBuffer, #data) *
+          RawEncryptionContext(#definition, #EC, #ECKs, #errorMessage) *
+
+          DecodedEncryptionContext(ret, #ECKs) *
+
+          scope(needs : #needs) * 
+          JSFunctionObject(#needs, "needs", #n_sc, #n_len, #n_proto) *
+          scope(readElements : #readElements) * 
+          JSFunctionObject(#readElements, "readElements", #rE_sc, #rE_len, #rE_proto) *
+          scope(toUtf8: #toUtf8) * 
+          JSFunctionObject(#toUtf8, "toUtf8", #t_sc, #t_len, #t_proto) *
+          JSInternals ()
+
+    @pre (this == undefined) * (encodedEncryptionContext == #eEC) *
+         Uint8Array(#eEC, #aBuffer, #byteOffset, #byteLength) * 
+         ArrayBuffer(#aBuffer, #data) *
+         (#EC == l-sub(#data, #byteOffset, #byteLength)) *
+         (#definition == "Broken") *
+         RawEncryptionContext(#definition, #EC, #ECKs, #errorMessage) *
+
+         scope(needs : #needs) * 
+         JSFunctionObject(#needs, "needs", #n_sc, #n_len, #n_proto) *
+         scope(readElements : #readElements) * 
+         JSFunctionObject(#readElements, "readElements", #rE_sc, #rE_len, #rE_proto) *
+         scope(toUtf8: #toUtf8) * 
+         JSFunctionObject(#toUtf8, "toUtf8", #t_sc, #t_len, #t_proto) *
+         JSInternals()
+
+    @posterr
+          Uint8Array(#eEC, #aBuffer, #byteOffset, #byteLength) * 
+          ArrayBuffer(#aBuffer, #data) *
+          RawEncryptionContext(#definition, #EC, #ECKs, #errorMessage) *
+
+          ErrorObjectWithMessage(ret, #errorMessage) *
+
+          scope(needs : #needs) * 
+          JSFunctionObject(#needs, "needs", #n_sc, #n_len, #n_proto) *
+          scope(readElements : #readElements) * 
+          JSFunctionObject(#readElements, "readElements", #rE_sc, #rE_len, #rE_proto) *
+          scope(toUtf8: #toUtf8) * 
+          JSFunctionObject(#toUtf8, "toUtf8", #t_sc, #t_len, #t_proto) *
+          JSInternals ()
+*/
+function decodeEncryptionContext(encodedEncryptionContext) {
+  ...
+}
+```
+
+Specifications are  written in comments, using `@`-annotations. Pre-conditions are denoted by `@pre`; post-conditions are denoted by `@post` when the function is intended to terminate normally, or `@posterr`, when the function is intended to terminate with an error. The actual assertions are written as in C, with building blocks separated by the separating conjunction, `*`. Note that the part capturing the functions using the built-in `scope` and  `JSFunctionObject` predicates could potentially be elided and generated automatically, together with the `JSInternals ()` predicate that captures the built-in objects, such as `Array`,  `ArrayBuffer`,  `Object`,  etc., together with their prototypes.
+
+Axiomatic specifications are written even more differently, as illustrated by the following axiomatic specification of the `toUtf8` function:
+
+```javascript
+/**
+   @id toUtf8
+
+   @onlyspec toUtf8 (buffer)
+       [[
+           (buffer == #buffer) *
+           Uint8Array (#buffer, #ab, 0, #length) *
+           ArrayBuffer(#ab, #element)
+       ]]
+       [[
+           Uint8Array (#buffer, #ab, 0, #length) *
+           ArrayBuffer(#ab, #element) *
+           toUtf8(#element, ret)
+       ]]
+       normal
+*/
+var toUtf8 = function (buffer) { };
+```
+
+where, after the function identifier, the keyword `@onlyspec` indicates an axiomatic specification, followed by a pre- and post-condition delimited by ``[[ ... ]]`` and the mode in which the function terminates (normal or error).
 
 ### Understanding the discovered bugs
 
