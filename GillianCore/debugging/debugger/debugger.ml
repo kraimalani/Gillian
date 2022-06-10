@@ -103,6 +103,7 @@ struct
   module ExecMap = struct
     type cmd_data = {
       id : L.ReportId.t;
+      origin_id : int option;
       display : string;
       has_unify : bool; [@key "hasUnify"]
     }
@@ -130,6 +131,7 @@ struct
         display
         ?(has_unify = false)
         path
+        origin_id
         map =
       let fail () =
         DL.failwith
@@ -145,7 +147,7 @@ struct
           "ExecMap.insert_cmd: malformed request"
       in
 
-      let cmd_data = { id = new_id; display; has_unify } in
+      let cmd_data = { id = new_id; display; has_unify; origin_id } in
 
       let rec aux path map =
         match (map, path) with
@@ -180,10 +182,13 @@ struct
         ?(has_unify = false)
         path
         new_source
+        origin_id
         ((source, map) : 'a with_source) =
       let insert () =
-        insert_cmd_sourceless cmd_kind new_id display ~has_unify path map
+        insert_cmd_sourceless cmd_kind new_id display ~has_unify path origin_id
+          map
       in
+
       match source with
       | None -> (Some new_source, insert ())
       | Some source ->
@@ -297,6 +302,78 @@ struct
       | Nothing -> None
       | Cmd ({ id; _ }, _) | BranchCmd ({ id; _ }, _) | FinalCmd { id; _ } ->
           Some id
+
+    let lift ~tl_ast exec_map =
+      DL.log (fun m -> m "Lifting");
+      let lift_data cmd_data =
+        let new_display =
+          Lifter.get_origin_node_str tl_ast cmd_data.origin_id
+        in
+        let new_displa =
+          if new_display = "No info!" then cmd_data.display else new_display
+        in
+        { cmd_data with display = new_displa }
+      in
+      let origin_id = function
+        | Nothing -> None
+        | Cmd (data, _) | FinalCmd data | BranchCmd (data, _) -> data.origin_id
+      in
+      let eq_opt ida idb =
+        match (ida, idb) with
+        | Some ida, Some idb -> Int.equal ida idb
+        | _ -> false
+      in
+      let merge_data ~left ~right =
+        (* Note that we don't need to lift left here, we only need to lift right
+           before calling this. *)
+        (* This is a tad problematic: in case left has a unification but not right,
+           the report id kept is the one of right, and it's going to be hard to look for unification there.
+           We keep the left one, because that's what we might require to click on the next possible branches.
+           On the other hand, if both have a unify, then I don't know what to do at all.
+           I suggest, we change cmd_data with
+           {
+             last_id: L.ReportId.t;
+             unify_ids : L.ReportId.t list // if empty, then has_unify is false
+             display;
+             origin_id;
+           }
+           In any case, this should be done after the report deadline.
+        *)
+        let origin_id =
+          match (left.origin_id, right.origin_id) with
+          | _, Some id | Some id, _ -> Some id
+          | _ -> None
+        in
+        { right with has_unify = left.has_unify || right.has_unify; origin_id }
+      in
+      let rec aux = function
+        | Nothing -> Nothing
+        | Cmd (data, next) -> (
+            let next = aux next in
+            if not (eq_opt data.origin_id (origin_id next)) then
+              Cmd (lift_data data, next)
+            else
+              match next with
+              | Cmd (data', next') ->
+                  Cmd (merge_data ~left:data ~right:data', next')
+              | FinalCmd data' -> FinalCmd (merge_data ~left:data ~right:data')
+              | BranchCmd (data', branches) ->
+                  BranchCmd (merge_data ~left:data ~right:data', branches)
+              | Nothing ->
+                  failwith "unreachable! id cannot be equal when there is no id"
+            )
+        | BranchCmd (data, branches) ->
+            let branches = List.map (fun (c, b) -> (c, aux b)) branches in
+            if
+              List.exists
+                (fun (_, b) -> eq_opt (origin_id b) data.origin_id)
+                branches
+            then
+              failwith "branch_cmd has the same id as its next: unhandled yet."
+            else BranchCmd (lift_data data, branches)
+        | FinalCmd data -> FinalCmd (lift_data data)
+      in
+      aux exec_map
   end
 
   type exec_map = branch_case ExecMap.with_source
@@ -439,6 +516,7 @@ struct
 
     type debug_state = {
       exec_map : exec_map_pkg; [@key "execMap"]
+      lifted_exec_map : exec_map_pkg option; [@key "liftedExecMap"]
       current_cmd_id : L.ReportId.t; [@key "currentCmdId"]
       proc_name : string; [@key "procName"]
     }
@@ -447,12 +525,17 @@ struct
     let get_debug_state dbg : debug_state =
       let current_cmd_id = dbg.cur_report_id in
       let exec_map = get_exec_map_pkg dbg in
+      let lifted_exec_map =
+        match (Lifter.source_map_ability, dbg.tl_ast) with
+        | true, Some tl_ast -> Some (ExecMap.lift ~tl_ast exec_map)
+        | _ -> None
+      in
       let proc_name =
         match dbg |> get_proc_name with
         | None -> "unknown proc"
         | Some proc_name -> proc_name
       in
-      { exec_map; current_cmd_id; proc_name }
+      { exec_map; current_cmd_id; proc_name; lifted_exec_map }
 
     let get_unification parent_id dbg =
       let++ unify_id =
@@ -741,13 +824,14 @@ struct
                    |> Logging.ConfigReport.of_yojson)
                 in
                 let cmd_display = cmd.cmd in
+                let origin_id = Annot.get_origin_id cmd.annot in
                 let tests = Verification.Debug.get_tests_for_prog prog in
                 let map =
                   ExecMap.(
                     Nothing
                     |> insert_cmd_sourceless
                          (kind_of_cases new_branch_cases)
-                         cur_report_id cmd_display branch_path)
+                         cur_report_id cmd_display branch_path origin_id)
                 in
                 let dbg =
                   ({
@@ -900,6 +984,7 @@ struct
                          |> Logging.ConfigReport.of_yojson)
                       in
                       let cmd_display = cmd.cmd in
+                      let origin_id = Annot.get_origin_id cmd.annot in
                       dbg.exec_map <-
                         (dbg.exec_map
                         |> ExecMap.(
@@ -907,7 +992,8 @@ struct
                                (List.hd dbg.frames).source_path
                              in
                              insert_cmd Final cur_report_id cmd_display
-                               ~has_unify:true branch_path source_file));
+                               ~has_unify:true branch_path source_file origin_id)
+                        );
                       execute_step cur_report_id dbg
                   | _ ->
                       update_report_id_and_inspection_fields cur_report_id dbg;
@@ -918,6 +1004,7 @@ struct
                            |> Logging.ConfigReport.of_yojson)
                         in
                         let cmd_display = cmd.cmd in
+                        let origin_id = Annot.get_origin_id cmd.annot in
                         let cmd_kind =
                           match new_branch_cases with
                           | Some cases -> Branch cases
@@ -931,7 +1018,7 @@ struct
                         dbg.exec_map <-
                           dbg.exec_map
                           |> insert_cmd cmd_kind cur_report_id cmd_display
-                               ~has_unify branch_path source_file);
+                               ~has_unify branch_path source_file origin_id);
                       Step)))
 
   let step_in_branch_case prev_id_in_frame ?branch_case ?(reverse = false) dbg =

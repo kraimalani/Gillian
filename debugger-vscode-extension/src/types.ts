@@ -28,6 +28,7 @@ export type UnifyMap = ['Direct', UnifySeg] | ['Fold', UnifySeg[]];
 
 export type DebugState = {
   execMap: ExecMap;
+  liftedExecMap: ExecMap | null;
   currentCmdId: number;
   procName: string;
 };
