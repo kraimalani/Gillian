@@ -3,6 +3,7 @@ module DL = Debugger_log
 module Gil_to_tl_lifter = Gil_to_tl_lifter
 module DebuggerTypes = DebuggerTypes
 module DebuggerUtils = DebuggerUtils
+module CommonTypes = Types.Common
 open DebuggerTypes
 open Syntaxes.Option
 
@@ -72,12 +73,11 @@ struct
   type tl_ast = PC.tl_ast
 
   module PackagedBranchCase = struct
-    type t = { kind : string; display : string * string; json : Yojson.Safe.t }
-    [@@deriving yojson]
+    type t = CommonTypes.branch_case_pkg [@@deriving yojson]
 
     let from case =
       let open Verification.SAInterpreter in
-      let json = branch_case_to_yojson case in
+      let json = branch_case_to_yojson case |> Yojson.Safe.to_string in
       let kind, display =
         match case with
         | GuardedGoto b -> ("GuardedGoto", ("If/Else", Fmt.str "%B" b))
@@ -91,10 +91,10 @@ struct
         | LActionFail x ->
             ("LActionFail", ("Logical action failure", Fmt.str "%d" x))
       in
-      { kind; display; json }
+      CommonTypes.{ kind; display; json }
 
-    let unpackage { json; _ } =
-      json |> branch_case_of_yojson
+    let unpackage ({ json; _ } : t) =
+      json |> Yojson.Safe.from_string |> branch_case_of_yojson
       |> Result.map_error (fun _ -> "Malformed branch case json!")
   end
 
@@ -102,15 +102,8 @@ struct
     open Verification.SUnifier.Logging
 
     type unify_kind = Unifier.unify_kind [@@deriving yojson]
-    type unify_result = Success | Failure [@@deriving yojson]
-
-    type assertion_data = {
-      id : rid;
-      fold : (rid * unify_result) option;
-      assertion : string;
-      substitutions : (string * string) list;
-    }
-    [@@deriving yojson]
+    type unify_result = CommonTypes.unify_result [@@deriving yojson]
+    type assertion_data = rid CommonTypes.assertion_data [@@deriving yojson]
 
     type unify_seg =
       | Assertion of assertion_data * unify_seg
